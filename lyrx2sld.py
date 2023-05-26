@@ -14,18 +14,19 @@ def rgb2hex(color):
     hex_color = "#{:02x}{:02x}{:02x}".format(r, g, b)
     return hex_color
 
-# %%  
+# %%  磅转像素 DPI 96
+
 def pt2px(value):
     dpi = 96
     px = dpi/72*value
     return px
 
-# %% 判断类别 提取颜色 十六进制
+# %% 判断类别 提取颜色 十六进制 这里我对面填充的类别进行重写
 # type:类型
 # color：颜色
 # opacity：透明度
 
-def judgcategory(style):
+def judgPolygon(style):
     type = style['type']
     if type == 'CIMSolidFill':
         type='fill_color'
@@ -66,7 +67,7 @@ def ttf_img(style):
     return fontFamily,chartindex,size,stepX,stepY
     
 
-# %% 
+# %%  轮廓线 属性
 
 def stroke_line(style):
     type = style['type']
@@ -96,7 +97,7 @@ def pology_line(style):
 
 
 
-# %%  tag_root
+# %%  一些基础模板
 tag_root_mod = '' +\
     '<?xml version="1.0" encoding="UTF-8"?>' +\
     '<StyledLayerDescriptor xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1.0" xsi:schemaLocation="http://www.opengis.net/sld http://schemas.opengis.net/sld/1.1.0/StyledLayerDescriptor.xsd" xmlns:se="http://www.opengis.net/se" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +\
@@ -128,22 +129,24 @@ filt_mod = '' +\
             '<ogc:Literal>%s</ogc:Literal>' +\
         '</ogc:PropertyIsEqualTo>' +\
     '</ogc:Filter>'
-# %% 
-def borderline_mode(value):
-    if value[0] == 'border_line':
-        BorderLine = '' +\
-            '<se:LineSymbolizer>' +\
-            '<se:Stroke>' +\
-              '<se:SvgParameter name="stroke">%s</se:SvgParameter>' % value[1] +\
-              '<se:SvgParameter name="stroke-width">%s</se:SvgParameter>' % value[11] +\
-              '<se:SvgParameter name="stroke-linejoin">%s</se:SvgParameter>' % value[12] +\
-              '<se:SvgParameter name="stroke-linecap">%s</se:SvgParameter>' % value[13] +\
-            '</se:Stroke>' +\
-            '</se:LineSymbolizer>' 
-    return BorderLine
 
-# %% 
 
+
+# %%  borderline 模板
+# def borderline_mode(value):
+#     if value[0] == 'border_line':
+#         BorderLine = '' +\
+#             '<se:LineSymbolizer>' +\
+#             '<se:Stroke>' +\
+#               '<se:SvgParameter name="stroke">%s</se:SvgParameter>' % value[1] +\
+#               '<se:SvgParameter name="stroke-width">%s</se:SvgParameter>' % value[11] +\
+#               '<se:SvgParameter name="stroke-linejoin">%s</se:SvgParameter>' % value[12] +\
+#               '<se:SvgParameter name="stroke-linecap">%s</se:SvgParameter>' % value[13] +\
+#             '</se:Stroke>' +\
+#             '</se:LineSymbolizer>' 
+#     return BorderLine
+
+# %% 面填充 模板
 
 def polygonSymbol_mode(value):
     if value[0] == 'fill_color':
@@ -192,20 +195,22 @@ def polygonSymbol_mode(value):
                     '</se:GraphicFill>' +\
                 '</se:Fill>' +\
             '</se:PolygonSymbolizer>' 
+    elif value[0] == 'border_line':
+        PolygonSymbol = '' +\
+            '<se:LineSymbolizer>' +\
+            '<se:Stroke>' +\
+              '<se:SvgParameter name="stroke">%s</se:SvgParameter>' % value[1] +\
+              '<se:SvgParameter name="stroke-width">%s</se:SvgParameter>' % value[11] +\
+              '<se:SvgParameter name="stroke-linejoin">%s</se:SvgParameter>' % value[12] +\
+              '<se:SvgParameter name="stroke-linecap">%s</se:SvgParameter>' % value[13] +\
+            '</se:Stroke>' +\
+            '</se:LineSymbolizer>' 
     else:
          PolygonSymbol = None
     return PolygonSymbol
 
 
-# %% 
 
-def judgstyle(value):
-    if value[0] == 'border_line':
-        style_sld=borderline_mode(value)
-
-    else:
-        style_sld=polygonSymbol_mode(value)
-    return style_sld
 
 # %% 文件路径与读取
 
@@ -225,6 +230,21 @@ prop="".join(groups[0]['heading'])
 keys = groups[0]['classes']
 
 
+# %% 面填充的sld混合
+
+def polygon_mix(styles):
+    symbols=[]
+    symbols.append(filt_mod % (prop,label))
+    for style in styles[::-1]:
+        type_value = judgPolygon(style)
+        ttf_value = ttf_img(style)
+        pology_line_value = pology_line(style)
+        stroke_value = stroke_line(style)
+        num = type_value+ttf_value+pology_line_value+stroke_value
+        symbol_one=polygonSymbol_mode(num)
+        symbols.append(symbol_one)
+    return symbols
+
 # %% 循环 主路口 获取所需要的值
 # num 内包含的顺序分别为：
 # 图层类别 颜色 透明度 
@@ -240,20 +260,7 @@ for key in keys:
     field = "".join(key['values'][0]['fieldValues'])
     type_all = key['symbol']['symbol']['type']
     styles = key['symbol']['symbol']['symbolLayers']
-    value=[]
-    symbols=[]
-    symbols.append(filt_mod % (prop,label))
-    symbol_all=[]
-    for style in styles[::-1]:
-        type_value = judgcategory(style)
-        ttf_value = ttf_img(style)
-        pology_line_value = pology_line(style)
-        stroke_value = stroke_line(style)
-        num = type_value+ttf_value+pology_line_value+stroke_value
-        symbol_one=judgstyle(num)
-        symbols.append(symbol_one)
-        value.append(num)
-    num_value.append(value)
+    symbols=polygon_mix(styles)
     symbol_all=''.join(symbols)
     rules = rule_mod % (label,label,symbol_all)
     groups.append(rules)
